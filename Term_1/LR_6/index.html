@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Currency Observer Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .currency-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .currency-card {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            transition: transform 0.2s;
+        }
+        .currency-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .currency-code {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .currency-rate {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #27ae60;
+            margin: 5px 0;
+        }
+        .currency-name {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        .currency-nominal {
+            color: #95a5a6;
+            font-size: 0.8em;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 1em;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .last-update {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            margin: 10px 0;
+        }
+        .endpoints {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .endpoints h3 {
+            margin-top: 0;
+        }
+        .endpoints ul {
+            list-style: none;
+            padding: 0;
+        }
+        .endpoints li {
+            margin: 8px 0;
+        }
+        .endpoints a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .endpoints a:hover {
+            text-decoration: underline;
+        }
+        .debug-info {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .message-log {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 Currency Observer Demo</h1>
+        <p>Демонстрация паттерна Наблюдатель с WebSocket в реальном времени</p>
+
+        <div class="status disconnected" id="status">
+            ❌ WebSocket disconnected
+        </div>
+
+        <div class="controls">
+            <button onclick="connect()" id="connectBtn">Connect</button>
+            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+            <button onclick="requestUpdate()" id="updateBtn" disabled>Обновить сейчас</button>
+            <button onclick="clearDebug()" id="clearBtn">Очистить логи</button>
+        </div>
+
+        <div id="debug" class="debug-info" style="display: none;">
+            <strong>Debug Info:</strong>
+            <div id="debugContent"></div>
+        </div>
+
+        <h3>📊 Основные валюты:</h3>
+        <div id="currencies">
+            <div class="currency-grid">
+                <div class="currency-card" data-currency="USD">
+                    <div class="currency-code">USD</div>
+                    <div class="currency-rate">-</div>
+                    <div class="currency-name">Доллар США</div>
+                    <div class="currency-nominal">Номинал: 1</div>
+                </div>
+                <div class="currency-card" data-currency="EUR">
+                    <div class="currency-code">EUR</div>
+                    <div class="currency-rate">-</div>
+                    <div class="currency-name">Евро</div>
+                    <div class="currency-nominal">Номинал: 1</div>
+                </div>
+                <div class="currency-card" data-currency="GBP">
+                    <div class="currency-code">GBP</div>
+                    <div class="currency-rate">-</div>
+                    <div class="currency-name">Фунт стерлингов</div>
+                    <div class="currency-nominal">Номинал: 1</div>
+                </div>
+                <div class="currency-card" data-currency="CNY">
+                    <div class="currency-code">CNY</div>
+                    <div class="currency-rate">-</div>
+                    <div class="currency-name">Юань</div>
+                    <div class="currency-nominal">Номинал: 1</div>
+                </div>
+                <div class="currency-card" data-currency="JPY">
+                    <div class="currency-code">JPY</div>
+                    <div class="currency-rate">-</div>
+                    <div class="currency-name">Иена</div>
+                    <div class="currency-nominal">Номинал: 100</div>
+                </div>
+                <div class="currency-card" data-currency="CHF">
+                    <div class="currency-code">CHF</div>
+                    <div class="currency-rate">-</div>
+                    <div class="currency-name">Швейцарский франк</div>
+                    <div class="currency-nominal">Номинал: 1</div>
+                </div>
+            </div>
+            <p class="last-update">Подключитесь к WebSocket для получения данных в реальном времени...</p>
+        </div>
+
+        <div class="endpoints">
+            <h3>🔗 Доступные endpoints:</h3>
+            <ul>
+                <li><a href="/docs" target="_blank">/docs</a> - Документация API (Swagger UI)</li>
+                <li><a href="/current-rates" target="_blank">/current-rates</a> - JSON со всеми курсами валют</li>
+                <li><a href="/status" target="_blank">/status</a> - Статус системы мониторинга</li>
+                <li><a href="/rates/USD" target="_blank">/rates/USD</a> - Курс конкретной валюты (пример)</li>
+            </ul>
+        </div>
+
+        <div class="message-log">
+            <strong>📨 Лог сообщений:</strong>
+            <div id="messageLog"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/currency`;
+
+            logMessage('🔄 Connecting to WebSocket: ' + wsUrl);
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                logMessage('✅ WebSocket connected');
+                isConnected = true;
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('status').innerHTML = '✅ WebSocket connected';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('updateBtn').disabled = false;
+
+                // Отправляем подписку
+                ws.send(JSON.stringify({type: "subscribe"}));
+                logMessage('📤 Sent subscribe message');
+            };
+
+            ws.onmessage = (event) => {
+                logMessage('📨 Received: ' + event.data);
+
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'currency_update') {
+                        logMessage('🔄 Processing currency update');
+                        updateCurrencies(data.data);
+                    } else if (data.type === 'subscribed') {
+                        showDebugInfo('✅ ' + data.message);
+                        logMessage('✅ Subscription confirmed');
+                    } else if (data.type === 'status') {
+                        showDebugInfo('ℹ️ ' + data.message);
+                        logMessage('ℹ️ ' + data.message);
+                    } else if (data.type === 'error') {
+                        showDebugInfo('❌ ' + data.message);
+                        logMessage('❌ ' + data.message);
+                    }
+                } catch (error) {
+                    const errorMsg = '❌ Error parsing message: ' + error.message;
+                    console.error(errorMsg, error);
+                    showDebugInfo(errorMsg);
+                    logMessage(errorMsg);
+                }
+            };
+
+            ws.onclose = (event) => {
+                logMessage(`❌ WebSocket disconnected: code=${event.code}, reason=${event.reason || 'none'}`);
+                isConnected = false;
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').innerHTML = '❌ WebSocket disconnected';
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('updateBtn').disabled = true;
+
+                if (event.code !== 1000) {
+                    showDebugInfo(`WebSocket закрыт с кодом: ${event.code}, причина: ${event.reason || 'не указана'}`);
+                }
+            };
+
+            ws.onerror = (error) => {
+                const errorMsg = '💥 WebSocket error: ' + (error.message || 'Unknown error');
+                logMessage(errorMsg);
+                console.error('💥 WebSocket error:', error);
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').innerHTML = '❌ WebSocket connection error';
+                showDebugInfo(errorMsg);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                logMessage('🛑 Disconnecting WebSocket...');
+                ws.close(1000, 'User disconnected');
+                ws = null;
+            }
+        }
+
+        function requestUpdate() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                logMessage('🔄 Requesting immediate update...');
+                ws.send(JSON.stringify({type: "force_update"}));
+                showDebugInfo('Запрос на обновление отправлен');
+            } else {
+                const errorMsg = 'WebSocket не подключен для запроса обновления';
+                showDebugInfo(errorMsg);
+                logMessage('❌ ' + errorMsg);
+            }
+        }
+
+        function updateCurrencies(data) {
+            logMessage('🔄 Updating currencies with data: ' + Object.keys(data.rates || {}).length + ' currencies');
+
+            if (!data.rates) {
+                logMessage('❌ No rates data in update');
+                return;
+            }
+
+            // Получаем все карточки валют
+            const currencyCards = document.querySelectorAll('.currency-card');
+
+            currencyCards.forEach(card => {
+                const currencyCode = card.getAttribute('data-currency');
+                if (currencyCode && data.rates[currencyCode]) {
+                    const currency = data.rates[currencyCode];
+                    card.innerHTML = `
+                        <div class="currency-code">${currencyCode}</div>
+                        <div class="currency-rate">${currency.rate ? currency.rate.toFixed(4) : 'N/A'} RUB</div>
+                        <div class="currency-name">${currency.name || currencyCode}</div>
+                        <div class="currency-nominal">Номинал: ${currency.nominal || 1}</div>
+                    `;
+                    logMessage(`✓ Updated ${currencyCode}: ${currency.rate}`);
+                }
+            });
+
+            // Обновляем время последнего обновления
+            const updateTime = document.querySelector('.last-update');
+            if (updateTime) {
+                const timestamp = data.timestamp || data.date || new Date().toISOString();
+                updateTime.textContent = `Последнее обновление: ${new Date().toLocaleTimeString()} (${new Date(timestamp).toLocaleDateString()})`;
+            }
+
+            showDebugInfo(`✅ Данные обновлены: ${Object.keys(data.rates).length} валют`);
+        }
+
+        function showDebugInfo(message) {
+            const debugDiv = document.getElementById('debug');
+            const debugContent = document.getElementById('debugContent');
+
+            debugDiv.style.display = 'block';
+            debugContent.innerHTML = `${new Date().toLocaleTimeString()}: ${message}<br>` + debugContent.innerHTML;
+
+            // Ограничиваем количество сообщений
+            const messages = debugContent.innerHTML.split('<br>');
+            if (messages.length > 10) {
+                debugContent.innerHTML = messages.slice(0, 10).join('<br>');
+            }
+        }
+
+        function logMessage(message) {
+            const messageLog = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+
+            messageLog.innerHTML = `[${timestamp}] ${message}<br>` + messageLog.innerHTML;
+
+            // Ограничиваем количество сообщений в логе
+            const messages = messageLog.innerHTML.split('<br>');
+            if (messages.length > 20) {
+                messageLog.innerHTML = messages.slice(0, 20).join('<br>');
+            }
+        }
+
+        function clearDebug() {
+            document.getElementById('debugContent').innerHTML = '';
+            document.getElementById('messageLog').innerHTML = '';
+            logMessage('🧹 Логи очищены');
+        }
+
+        // Автоподключение при загрузке страницы
+        window.addEventListener('load', function() {
+            logMessage('🚀 Page loaded, auto-connecting to WebSocket...');
+            connect();
+        });
+
+        // Периодический запрос обновлений каждые 30 секунд
+        setInterval(() => {
+            if (isConnected) {
+                logMessage('🔄 Auto-requesting update (30s interval)');
+                requestUpdate();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
