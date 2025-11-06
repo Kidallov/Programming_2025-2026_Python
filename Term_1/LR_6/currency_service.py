@@ -74,7 +74,7 @@ class CurrencyService(Subject):
             print(f"Общая ошибка при получении данных: {e}")
             return {}
 
-    async def _diagnose_ssl_issue(self):
+    def _diagnose_ssl_issue(self):
 
         try:
 
@@ -98,7 +98,8 @@ class CurrencyService(Subject):
     def parse_xml_currency_rates(self, xml: str) -> Dict[str, Any]:
 
         try:
-            root = ET.fromstring(xml)
+            xml_data_encoded = xml.encode('windows-1251')
+            root = ET.fromstring(xml_data_encoded)
             rates = {}
             timestamp = datetime.now().isoformat()
             date_str = root.get('Date', '')
