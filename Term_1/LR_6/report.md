@@ -16,10 +16,12 @@
 ### Структура проекта
 ```
 project/
-├── observer.py          # Базовые классы паттерна "Наблюдатель"
-├── observers.py         # Конкретные реализации наблюдателей
-├── currency_service.py  # Сервис работы с API ЦБ РФ
-└── app.py               # FastAPI приложение
+├── observer.py            # Базовые классы паттерна "Наблюдатель"
+├── observers.py           # Конкретные реализации наблюдателей
+├── currency_service.py    # Сервис работы с API ЦБ РФ
+├── websocket_observer.py  # WebSocket с Наблюдателем
+├── index.html             # Страница html, которая отображается пользователю
+└── app.py                 # FastAPI приложение
 ```
 
 ## Детали реализации
@@ -118,6 +120,7 @@ async def lifespan(app: FastAPI):
 - Phtonic структура
 
 #### API Endpoints
+
 ```python
 @app.get("/current-rates")          # Все курсы валют
 @app.get("/rates/{currency_code}")  # Конкретная валюта
@@ -202,6 +205,7 @@ async def lifespan(app: FastAPI):
 ## Примеры работы
 
 ### Консольный вывод при запуске
+
 ```
 ! ОБНОВЛЕНИЕ КУРСОВ ВАЛЮТ (2025-11-06T12:00:53.183880)
 ------------------------------------------------------------
@@ -382,6 +386,9 @@ INFO:     Finished server process [85772]
 Process finished with exit code 0
 
 ```
+
+## Добавление WebSocket
+
 
 ## Заключение
 
