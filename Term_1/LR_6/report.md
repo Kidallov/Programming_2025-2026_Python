@@ -10,6 +10,7 @@
 - aiohttp для асинхронных HTTP запросов
 - SSL/TLS для безопасного соединения
 - XML парсинг для обработки данных ЦБ РФ
+- WebSocket для реального времени
 
 ## Архитектура системы
 
@@ -20,7 +21,7 @@ project/
 ├── observers.py           # Конкретные реализации наблюдателей
 ├── currency_service.py    # Сервис работы с API ЦБ РФ
 ├── websocket_observer.py  # WebSocket с Наблюдателем
-├── index.html             # Страница html, которая отображается пользователю
+├── index.html             # Веб-интерфейс для отображения курсов
 └── app.py                 # FastAPI приложение
 ```
 
@@ -49,13 +50,94 @@ class Subject(ABC):
 
 **Важный момент:** Использование `asyncio.gather()` позволяет уведомлять всех наблюдателей параллельно, что значительно повышает производительность. Иначе пользователи будут стоять в очереди и ждать, пока обработается один запрос, чтобы перейти к следующему.
 
-### 2. Конкретные наблюдатели (observers.py)
+## 2. WebSocket Observer (websocket_observer.py)
+
+Архитектура WebSocket наблюдателя
+
+python
+class WebsocketObserver(Observer):
+    def __init__(self):
+        self.connections: Set = set()  # Множество активных соединений
+Ключевые особенности:
+
+Множество соединений - использует set() для хранения активных WebSocket соединений
+Обработка ошибок - каждая отправка обернута в try-except блок
+Статистика подключений - отслеживание количества активных клиентов
+Метод update()
+
+python
+async def update(self, currency_data: Dict[str, Any]):
+    if self.connections:
+        message = json.dumps({
+            "type": "currency_update",
+            "data": currency_data,
+            "timestamp": currency_data.get('timestamp')
+        }, ensure_ascii=False)
+        
+        for connection in self.connections:
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                print(f"Error sending message: {e}")
+Формат сообщения:
+
+type: "currency_update" - идентификатор типа сообщения
+data: полные данные о валютах
+timestamp: временная метка обновления
+Управление соединениями
+
+python
+def add_connection(self, websocket):
+    self.connections.add(websocket)
+    print(f"WebSocket клиент подключен. Всего: {len(self.connections)}")
+
+def remove_connection(self, websocket):
+    if websocket in self.connections:
+        self.connections.remove(websocket)
+        print(f"WebSocket клиент отключен. Всего: {len(self.connections)}")
+Преимущества использования Set:
+
+Автоматическое предотвращение дубликатов
+Быстрый поиск и удаление O(1)
+Эффективное управление памятью
+
+## 3. Интеграция в FastAPI приложение
+
+WebSocket endpoint
+
+python
+@app.websocket("/ws/currency")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    websocket_observer.add_connection(websocket)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await handle_websocket_message(data, websocket)
+    except WebSocketDisconnect:
+        websocket_observer.remove_connection(websocket)
+Обработка сообщений от клиентов
+
+python
+async def handle_websocket_message(message: str, websocket: WebSocket):
+    try:
+        data = json.loads(message)
+        if data.get("type") == "subscribe":
+            await websocket.send_text(json.dumps({
+                "type": "subscribed",
+                "message": "Вы подписаны на обновления курсов валют"
+            }, ensure_ascii=False))
+    except json.JSONDecodeError:
+        pass
+
+### 4. Конкретные наблюдатели (observers.py)
 
 * **EmailNotifier:** Имитирует отправку email-уведомлений
 * **LoggerObserver:** Записывает данные в JSON-лог файл
 * **ConsoleDisplay:** Форматирует вывод в консоль
 
-### 3. Сервис валют (currency_service.py)
+### 5. Сервис валют (currency_service.py)
 
 #### SSL/TLS Безопасное соединение
 ```python
@@ -97,7 +179,7 @@ def has_changes(self) -> bool:
     return change > 0  # Любое изменение приведет к уведомлению наблюдателей
 ```
 
-### 4. FastAPI приложение (app.py)
+### 6. FastAPI приложение (app.py)
 
 #### Современный Lifespan менеджер
 ```python
@@ -187,6 +269,11 @@ async def lifespan(app: FastAPI):
 - **Параллельное уведомление** наблюдателей через `asyncio.gather()`
 - **Фоновый мониторинг** без блокировки основного потока
 
+### Real-time обновления через WebSocket
+- **Мгновенная доставка** обновлений всем подключенным клиентам
+- **Автоматическое управление** соединениями
+- **Обработка ошибок** передачи с сохранением стабильности системы
+
 ### Точность обработки данных
 - **Многоуровневая валидация** XML структуры
 - **Корректное преобразование** числовых форматов
@@ -201,6 +288,7 @@ async def lifespan(app: FastAPI):
 - **Документация API:** http://localhost:8000/docs
 - **Текущие курсы:** http://localhost:8000/current-rates
 - **Статус системы:** http://localhost:8000/status
+- WebSocket: ws://localhost:8000/ws/currency
 
 ## Примеры работы
 
@@ -217,6 +305,28 @@ async def lifespan(app: FastAPI):
 ------------------------------------------------------------
 ```
 
+## WebSocket взаимодействие
+
+### Клиент подключается:
+
+```
+text
+WebSocket клиент подключен. Всего: 1
+```
+### Обновление данных:
+```
+json
+{
+  "type": "currency_update",
+  "data": {
+    "rates": {
+      "USD": {"rate": 81.1885, "name": "Доллар США", "nominal": 1},
+      "EUR": {"rate": 93.5131, "name": "Евро", "nominal": 1}
+    },
+    "timestamp": "2025-11-06T12:00:53.183880"
+  }
+}
+```
 ## Полный вывод программы
 
 ### Двойной запрос в начале - это особенность реализации, которая обеспечивает:
@@ -387,14 +497,14 @@ Process finished with exit code 0
 
 ```
 
-## Добавление WebSocket
-
-
 ## Заключение
 
 Реализованная система успешно демонстрирует:
-- Корректную работу паттерна "Наблюдатель" в асинхронной среде
-- Безопасное взаимодействие с внешним API
-- Эффективную обработку и валидацию финансовых данных
-- Современные подходы к разработке на FastAPI
-- Масштабируемую и поддерживаемую архитектуру
+
+* Корректную работу паттерна "Наблюдатель" в асинхронной среде
+* Безопасное взаимодействие с внешним API
+* Эффективную обработку и валидацию финансовых данных
+* Современные подходы к разработке на FastAPI
+* Масштабируемую и поддерживаемую архитектуру
+* Real-time обновления через WebSocket для веб-клиентов
+**WebSocket Observer** обеспечивает мгновенную доставку обновлений всем подключенным клиентам, а **веб-интерфейс** предоставляет удобный способ визуализации данных в реальном времени.
