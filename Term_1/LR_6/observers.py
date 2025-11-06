@@ -12,7 +12,7 @@ class EmailNotifier(Observer):
         rates = currency_data.get('rates', {})
 
         message = f"Обновление курсов валют от {timestamp}:\n\n"
-        for code, data in list(rates.items())[:5]:  # Показываем только первые 5 валют
+        for code, data in list(rates.items())[:5]:
             message += f"{code} ({data['name']}): {data['rate']:.4f} RUB\n"
 
         print(f"=== EMAIL УВЕДОМЛЕНИЕ ДЛЯ {self.email} ===")
